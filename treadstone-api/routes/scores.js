@@ -1,11 +1,12 @@
 // routes/scores.js
 
 const express = require('express')
+const { isAdmin } = require('../middleware/auth') // Step 3: Import middleware
 
 function createScoresRouter(pool) {
   const router = express.Router()
 
-  // GET /scores - Fetch all scores with joined player names
+  // GET /scores - Public: Fetch all scores with joined player names
   router.get('/', async (req, res) => {
     try {
       const db = await pool.connect()
@@ -41,6 +42,13 @@ function createScoresRouter(pool) {
       res.status(500).json({ error: 'Failed to fetch scores' })
     }
   })
+
+  // Future example: Protected POST route
+  /*
+  router.post('/', isAdmin, async (req, res) => {
+    // TODO: Insert score
+  })
+  */
 
   return router
 }
