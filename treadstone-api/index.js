@@ -1,8 +1,8 @@
-// 1. Import dependencies
+// 1. Import dependencies (REQUIRE STATEMENTS)
 const express = require('express')
 const cors = require('cors')
 const { Pool } = require('pg')
-const playersRouter = require('./routes/players') // importing the modular router
+const createPlayersRouter = require('./routes/players') //renamed to match function export
 require('dotenv').config()
 
 // 2. App setup
@@ -19,7 +19,7 @@ const pool = new Pool({
 })
 app.set('db', pool) // Attaching POOL for SHARED access in routers
 
-// 5. //-----ROUTES BELOW------//
+// 5. Routes
 
 // Root route
 app.get('/', (req, res) => {
@@ -39,10 +39,8 @@ app.get('/events', async (req, res) => {
   }
 })
 
-app.use('/players', playersRouter)
-
-
-
+// Players route (modular)
+app.use('/players', createPlayersRouter(pool)) 
 
 // 6. Start server
 app.listen(PORT, () => {
