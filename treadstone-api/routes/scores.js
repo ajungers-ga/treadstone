@@ -1,12 +1,12 @@
 // routes/scores.js
 
 const express = require('express')
-const { isAdmin } = require('../middleware/auth') // Step 3: Import middleware
+const { isAdmin } = require('../middleware/auth') // 1. Import admin middleware
 
 function createScoresRouter(pool) {
   const router = express.Router()
 
-  // GET /scores - Public: Fetch all scores with joined player names
+  // 2. Public route - get all scores with joined player names
   router.get('/', async (req, res) => {
     try {
       const db = await pool.connect()
@@ -43,13 +43,78 @@ function createScoresRouter(pool) {
     }
   })
 
-  // Future example: Protected POST route
-  /*
+  // 3. Protected route - create a new score (admin only)
   router.post('/', isAdmin, async (req, res) => {
-    // TODO: Insert score
-  })
-  */
+    const { event_id, player1_id, player2_id, player3_id, player4_id, strokes, placement, notes } = req.body
 
+    try {
+      const db = await pool.connect()
+
+      const result = await db.query(
+        `INSERT INTO scores 
+          (event_id, player1_id, player2_id, player3_id, player4_id, strokes, placement, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [event_id, player1_id, player2_id, player3_id, player4_id, strokes, placement, notes]
+      )
+
+      db.release()
+      res.status(201).json(result.rows[0])
+    } catch (err) {
+      console.error('Error inserting score:', err)
+      res.status(500).json({ error: 'Failed to create score' })
+    }
+  })
+
+  // 4. Protected route - update a score (admin only)
+  router.put('/:id', isAdmin, async (req, res) => {
+    const { strokes, placement, notes } = req.body
+
+    try {
+      const db = await pool.connect()
+
+      const result = await db.query(
+        `UPDATE scores
+         SET strokes = $1, placement = $2, notes = $3
+         WHERE id = $4
+         RETURNING *`,
+        [strokes, placement, notes, req.params.id]
+      )
+
+      db.release()
+
+      if (result.rowCount === 0) {
+        res.status(404).json({ error: 'Score not found' })
+      } else {
+        res.json(result.rows[0])
+      }
+    } catch (err) {
+      console.error('Error updating score:', err)
+      res.status(500).json({ error: 'Failed to update score' })
+    }
+  })
+
+  // 5. Protected route - delete a score (admin only)
+  router.delete('/:id', isAdmin, async (req, res) => {
+    try {
+      const db = await pool.connect()
+
+      const result = await db.query('DELETE FROM scores WHERE id = $1', [req.params.id])
+
+      db.release()
+
+      if (result.rowCount === 0) {
+        res.status(404).json({ error: 'Score not found' })
+      } else {
+        res.json({ message: 'Score deleted' })
+      }
+    } catch (err) {
+      console.error('Error deleting score:', err)
+      res.status(500).json({ error: 'Failed to delete score' })
+    }
+  })
+
+  // 6. Return the router
   return router
 }
 
