@@ -2,7 +2,8 @@
 const express = require('express')
 const cors = require('cors')
 const { Pool } = require('pg')
-const createPlayersRouter = require('./routes/players') //renamed to match function export
+const createPlayersRouter = require('./routes/players') // named function export
+const eventsRouter = require('./routes/events') // modular route
 require('dotenv').config()
 
 // 2. App setup
@@ -26,21 +27,9 @@ app.get('/', (req, res) => {
   res.send('Treadstone API is live!')
 })
 
-// Events route (still inline for now)
-app.get('/events', async (req, res) => {
-  try {
-    const db = await pool.connect()
-    const result = await db.query('SELECT * FROM events')
-    db.release()
-    res.json(result.rows)
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: 'Failed to fetch events' })
-  }
-})
-
-// Players route (modular)
+// Modular routes
 app.use('/players', createPlayersRouter(pool)) 
+app.use('/events', eventsRouter)
 
 // 6. Start server
 app.listen(PORT, () => {
