@@ -40,14 +40,35 @@ function createPlayersRouter(pool) {
 
   // 4. Protected route - create new player (admin only)
   router.post('/', isAdmin, async (req, res) => {
-    const { first_name, last_name, nickname } = req.body
+    const {
+      first_name,
+      last_name,
+      nickname,
+      hometown,
+      debut_year,
+      image_url,
+      hof_inducted,
+      hof_year,
+      accolades
+    } = req.body
+
     const db = await pool.connect()
     try {
       const result = await db.query(
-        'INSERT INTO players (first_name, last_name, nickname) VALUES ($1, $2, $3) RETURNING *',
-        [first_name, last_name, nickname]
+        `INSERT INTO players 
+        (first_name, last_name, nickname, hometown, debut_year, image_url, hof_inducted, hof_year, accolades)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING *`,
+        [first_name, last_name, nickname, hometown, debut_year, image_url, hof_inducted, hof_year, accolades]
       )
-      res.status(201).json(result.rows[0])
+
+      const newPlayer = result.rows[0]
+
+      res.status(201).json({
+        message: 'Player created',
+        player_id: newPlayer.id,
+        data: newPlayer
+      })
     } catch (err) {
       console.error('Error creating player:', err)
       res.status(500).json({ error: 'Failed to create player' })
@@ -63,7 +84,11 @@ function createPlayersRouter(pool) {
       last_name,
       nickname,
       hometown,
-      debut_year
+      debut_year,
+      image_url,
+      hof_inducted,
+      hof_year,
+      accolades
     } = req.body
 
     const db = await pool.connect()
@@ -74,10 +99,14 @@ function createPlayersRouter(pool) {
              last_name = $2,
              nickname = $3,
              hometown = $4,
-             debut_year = $5
-         WHERE id = $6
+             debut_year = $5,
+             image_url = $6,
+             hof_inducted = $7,
+             hof_year = $8,
+             accolades = $9
+         WHERE id = $10
          RETURNING *`,
-        [first_name, last_name, nickname, hometown, debut_year, req.params.id]
+        [first_name, last_name, nickname, hometown, debut_year, image_url, hof_inducted, hof_year, accolades, req.params.id]
       )
 
       if (result.rowCount === 0) {

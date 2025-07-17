@@ -45,7 +45,16 @@ function createScoresRouter(pool) {
 
   // 3. Protected route - create a new score (admin only)
   router.post('/', isAdmin, async (req, res) => {
-    const { event_id, player1_id, player2_id, player3_id, player4_id, strokes, placement, notes } = req.body
+    const {
+      event_id,
+      player1_id,
+      player2_id,
+      player3_id,
+      player4_id,
+      strokes,
+      placement,
+      notes
+    } = req.body
 
     try {
       const db = await pool.connect()
@@ -59,7 +68,14 @@ function createScoresRouter(pool) {
       )
 
       db.release()
-      res.status(201).json(result.rows[0])
+
+      const newScore = result.rows[0]
+
+      res.status(201).json({
+        message: 'Score created',
+        score_id: newScore.id,
+        data: newScore
+      })
     } catch (err) {
       console.error('Error inserting score:', err)
       res.status(500).json({ error: 'Failed to create score' })
@@ -86,7 +102,11 @@ function createScoresRouter(pool) {
       if (result.rowCount === 0) {
         res.status(404).json({ error: 'Score not found' })
       } else {
-        res.json(result.rows[0])
+        res.json({
+          message: 'Score updated',
+          score_id: result.rows[0].id,
+          data: result.rows[0]
+        })
       }
     } catch (err) {
       console.error('Error updating score:', err)
@@ -99,14 +119,17 @@ function createScoresRouter(pool) {
     try {
       const db = await pool.connect()
 
-      const result = await db.query('DELETE FROM scores WHERE id = $1', [req.params.id])
+      const result = await db.query('DELETE FROM scores WHERE id = $1 RETURNING *', [req.params.id])
 
       db.release()
 
       if (result.rowCount === 0) {
         res.status(404).json({ error: 'Score not found' })
       } else {
-        res.json({ message: 'Score deleted' })
+        res.json({
+          message: 'Score deleted',
+          score_id: result.rows[0].id
+        })
       }
     } catch (err) {
       console.error('Error deleting score:', err)
