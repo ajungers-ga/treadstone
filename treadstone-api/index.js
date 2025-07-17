@@ -2,9 +2,10 @@
 const express = require('express')
 const cors = require('cors')
 const { Pool } = require('pg')
-const createPlayersRouter = require('./routes/players') // named function export
+const createPlayersRouter = require('./routes/players')
 const createScoresRouter = require('./routes/scores')
-const eventsRouter = require('./routes/events') // modular route
+const createCoursesRouter = require('./routes/courses')
+const createEventsRouter = require('./routes/events')       
 require('dotenv').config()
 
 // 2. App setup
@@ -29,9 +30,10 @@ app.get('/', (req, res) => {
 })
 
 // 5.2 //----Modular routes----//
-app.use('/players', createPlayersRouter(pool)) 
-app.use('/events', eventsRouter)
+app.use('/players', createPlayersRouter(pool))
+app.use('/events', createEventsRouter(pool))  // now uses consistent create-style function
 app.use('/scores', createScoresRouter(pool))
+app.use('/courses', createCoursesRouter(pool))
 
 // 6. Start server
 app.listen(PORT, () => {
