@@ -140,7 +140,44 @@ function createPlayersRouter(pool) {
     }
   })
 
-  // 7. Return the router
+  // 7. Public route - get scores for a player
+  router.get('/:id/scores', async (req, res) => {
+    const playerId = req.params.id
+
+    try {
+      const db = await pool.connect()
+      const result = await db.query(
+        `
+        SELECT
+          s.*,
+          e.name AS event_name,
+          e.date AS event_date,
+          p1.first_name || ' ' || p1.last_name AS player1_name,
+          p2.first_name || ' ' || p2.last_name AS player2_name,
+          p3.first_name || ' ' || p3.last_name AS player3_name,
+          p4.first_name || ' ' || p4.last_name AS player4_name
+        FROM scores s
+        JOIN events e ON s.event_id = e.id
+        LEFT JOIN players p1 ON s.player1_id = p1.id
+        LEFT JOIN players p2 ON s.player2_id = p2.id
+        LEFT JOIN players p3 ON s.player3_id = p3.id
+        LEFT JOIN players p4 ON s.player4_id = p4.id
+        WHERE $1 IN (
+          s.player1_id, s.player2_id, s.player3_id, s.player4_id
+        )
+        ORDER BY e.date DESC
+        `,
+        [playerId]
+      )
+      db.release()
+      res.json(result.rows)
+    } catch (err) {
+      console.error('Error fetching player scores:', err)
+      res.status(500).json({ error: 'Failed to fetch player scores' })
+    }
+  })
+
+  // 8. Return the router
   return router
 }
 
