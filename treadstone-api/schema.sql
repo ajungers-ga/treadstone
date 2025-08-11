@@ -21,11 +21,11 @@ CREATE TABLE players (
   image_url  TEXT,
   hof_inducted BOOLEAN DEFAULT FALSE,
   hof_year INTEGER,
-  accolades TEXT,
-  -- NOTE: career wins are DERIVED (don’t store a wins column)
-  CONSTRAINT uq_player_name UNIQUE (first_name, last_name)
+  accolades TEXT
 );
 
+-- Uniqueness on player name (exact match)
+CREATE UNIQUE INDEX uq_player_name ON players(first_name, last_name);
 -- Helpful index for lookups
 CREATE INDEX idx_players_last_first ON players(last_name, first_name);
 
@@ -38,9 +38,12 @@ CREATE TABLE courses (
   city VARCHAR(100),
   state VARCHAR(100),
   -- Used to calculate to_par (e.g., strokes - par = to_par)
-  par INTEGER NOT NULL,
-  CONSTRAINT uq_course UNIQUE (name, COALESCE(city,''), COALESCE(state,''))
+  par INTEGER NOT NULL
 );
+
+-- Expression-based uniqueness must be a UNIQUE INDEX (not constraint)
+CREATE UNIQUE INDEX uq_course
+  ON courses (name, COALESCE(city, ''), COALESCE(state, ''));
 
 CREATE INDEX idx_courses_city_state ON courses(city, state);
 
@@ -57,9 +60,12 @@ CREATE TABLE events (
   season INTEGER NOT NULL,
   is_major BOOLEAN NOT NULL DEFAULT FALSE,
   major_label VARCHAR(50),
-  finalized BOOLEAN NOT NULL DEFAULT FALSE,
-  CONSTRAINT uq_event UNIQUE (name, date, course_id)
+  finalized BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+-- Simple column-based uniqueness can be a UNIQUE INDEX or constraint.
+-- Using UNIQUE INDEX for consistency:
+CREATE UNIQUE INDEX uq_event ON events(name, date, course_id);
 
 CREATE INDEX idx_events_season ON events(season);
 CREATE INDEX idx_events_date ON events(date);
@@ -81,19 +87,20 @@ CREATE TABLE scores (
   player4_id INTEGER REFERENCES players(id),
 
   -- Raw score and convenience fields
-  strokes INTEGER NOT NULL,   -- integer strokes (e.g., 69)
-  to_par  INTEGER,            -- optional convenience; can compute post-load
-  placement INTEGER,          -- 1,2,3,... ties handled at data level
+  strokes INTEGER,              -- now nullable to allow DQ entries
+  to_par  INTEGER,              -- optional convenience; can compute post-load
+  placement INTEGER,            -- 1,2,3,... ties handled at data level
   notes TEXT,
+  disqualified BOOLEAN NOT NULL DEFAULT FALSE -- NEW flag for DQ handling
+);
 
-  -- Prevent duplicate team entries for the same event
-  CONSTRAINT uq_scores_team UNIQUE (
-    event_id,
-    COALESCE(player1_id, 0),
-    COALESCE(player2_id, 0),
-    COALESCE(player3_id, 0),
-    COALESCE(player4_id, 0)
-  )
+-- Prevent duplicate team entries for the same event (expression-based UNIQUE INDEX)
+CREATE UNIQUE INDEX uq_scores_team ON scores (
+  event_id,
+  COALESCE(player1_id, 0),
+  COALESCE(player2_id, 0),
+  COALESCE(player3_id, 0),
+  COALESCE(player4_id, 0)
 );
 
 -- Helpful indexes for common queries
