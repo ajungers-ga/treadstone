@@ -1,35 +1,26 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { NavLink, Outlet } from 'react-router-dom'
 import './App.css'
+import { getApiBase } from './lib/api'
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const apiBase = getApiBase()
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <div style={{ fontFamily: 'system-ui, sans-serif' }}>
+      <header style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'baseline', gap: 16 }}>
+        <h1 style={{ margin: 0, fontSize: 22 }}>Treadstone</h1>
+        <nav style={{ display: 'flex', gap: 12 }}>
+          <NavLink to="/" end style={({ isActive }) => ({ textDecoration: isActive ? 'underline' : 'none' })}>Events</NavLink>
+          <NavLink to="/players" style={({ isActive }) => ({ textDecoration: isActive ? 'underline' : 'none' })}>Players</NavLink>
+        </nav>
+        <div style={{ marginLeft: 'auto', opacity: 0.7, fontSize: 13 }}>
+          API: <code>{apiBase}</code>
+        </div>
+      </header>
+
+      <main style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
+        <Outlet />
+      </main>
+    </div>
   )
 }
-
-export default App
