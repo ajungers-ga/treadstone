@@ -1,5 +1,5 @@
 // index.js — Treadstone API (CommonJS)
-// Express + pg, with events, players, and scores (names + computed to_par)
+// Express + pg, with events, players, and scores (names + computed to_par) + player profile routes
 
 const express = require('express');
 const cors = require('cors');
@@ -120,7 +120,7 @@ app.get('/events/:id/scores', async (req, res) => {
   }
 });
 
-// ---------- Players (for /players page) ----------
+// ---------- Players (list + detail + stats + results) ----------
 app.get('/players', async (_req, res) => {
   try {
     const q = `
@@ -139,12 +139,107 @@ app.get('/players', async (_req, res) => {
       ORDER BY last_name ASC, first_name ASC, id ASC;
     `;
     const { rows } = await pool.query(q);
-    // Add a convenience field full_name for the client
     const withFullName = rows.map(p => ({
       ...p,
       full_name: [p.first_name, p.last_name].filter(Boolean).join(' ').trim(),
     }));
     res.json(withFullName);
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+// single player
+app.get('/players/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const q = `
+      SELECT
+        id, first_name, last_name, nickname, hometown, debut_year,
+        image_url, hof_inducted, hof_year, accolades
+      FROM players
+      WHERE id = $1
+      LIMIT 1;
+    `;
+    const { rows } = await pool.query(q, [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Player not found' });
+    const p = rows[0];
+    p.full_name = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
+    res.json(p);
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+// player stats (aggregate across scores)
+app.get('/players/:id/stats', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const q = `
+      WITH player_scores AS (
+        SELECT
+          s.*,
+          e.season,
+          e.date,
+          c.par AS course_par,
+          COALESCE(s.to_par, (NULLIF(s.strokes::text,'')::int - c.par)) AS to_par_calc
+        FROM scores s
+        JOIN events e ON e.id = s.event_id
+        LEFT JOIN courses c ON c.id = e.course_id
+        WHERE $1 IN (s.player1_id, s.player2_id, s.player3_id, s.player4_id)
+      )
+      SELECT
+        COUNT(DISTINCT event_id)            AS events_played,
+        COUNT(*) FILTER (WHERE placement=1) AS events_won,
+        COUNT(*) FILTER (WHERE placement<=3) AS podiums,
+        MIN(placement)                      AS best_finish,
+        AVG(strokes)::numeric(10,2)         AS avg_strokes,
+        AVG(to_par_calc)::numeric(10,2)     AS avg_to_par,
+        MIN(date)                           AS first_event_date,
+        MAX(date)                           AS last_event_date,
+        COUNT(DISTINCT season)              AS seasons_played
+      FROM player_scores;
+    `;
+    const { rows } = await pool.query(q, [req.params.id]);
+    res.json(rows[0] || {});
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+// player results (list of events they played)
+app.get('/players/:id/results', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const q = `
+      SELECT
+        e.id AS event_id,
+        e.name AS event_name,
+        e.date,
+        e.season,
+        c.name AS course_name,
+        c.par  AS course_par,
+        s.id   AS score_id,
+        s.placement,
+        s.strokes,
+        COALESCE(s.to_par, (NULLIF(s.strokes::text,'')::int - c.par)) AS to_par,
+        /* team display */
+        CONCAT_WS(' ', p1.first_name, p1.last_name) AS player1_name,
+        CONCAT_WS(' ', p2.first_name, p2.last_name) AS player2_name,
+        CONCAT_WS(' ', p3.first_name, p3.last_name) AS player3_name,
+        CONCAT_WS(' ', p4.first_name, p4.last_name) AS player4_name
+      FROM scores s
+      JOIN events e ON e.id = s.event_id
+      LEFT JOIN courses c ON c.id = e.course_id
+      LEFT JOIN players p1 ON p1.id = s.player1_id
+      LEFT JOIN players p2 ON p2.id = s.player2_id
+      LEFT JOIN players p3 ON p3.id = s.player3_id
+      LEFT JOIN players p4 ON p4.id = s.player4_id
+      WHERE $1 IN (s.player1_id, s.player2_id, s.player3_id, s.player4_id)
+      ORDER BY e.date DESC, s.placement NULLS LAST, s.id ASC;
+    `;
+    const { rows } = await pool.query(q, [id]);
+    res.json(rows);
   } catch (e) {
     res.status(500).json({ error: String(e.message || e) });
   }
