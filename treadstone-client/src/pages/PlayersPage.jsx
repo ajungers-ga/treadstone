@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { apiFetch } from '../lib/api'
 
 export default function PlayersPage() {
@@ -8,7 +9,6 @@ export default function PlayersPage() {
 
   useEffect(() => {
     const controller = new AbortController()
-
     ;(async () => {
       setLoading(true)
       setError(null)
@@ -27,7 +27,6 @@ export default function PlayersPage() {
         setLoading(false)
       }
     })()
-
     return () => controller.abort()
   }, [])
 
@@ -41,10 +40,15 @@ export default function PlayersPage() {
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 12 }}>
         {players.map(p => (
           <li key={p.id} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 16 }}>
-            <div style={{ fontWeight: 600 }}>{p.name || p.full_name || '(Unnamed Player)'}</div>
+            <div style={{ fontWeight: 600 }}>
+              <Link to={`/players/${p.id}`} style={{ textDecoration: 'none' }}>
+                {p.full_name || `${p.first_name} ${p.last_name}`}
+                {p.nickname ? ` (“${p.nickname}”)` : ''}
+              </Link>
+            </div>
             <div style={{ opacity: 0.8, marginTop: 6 }}>
-              {p.nickname ? `“${p.nickname}”` : ''}
-              {p.hometown ? ` · ${p.hometown}` : ''}
+              {p.hometown ? `${p.hometown}` : ''}
+              {p.debut_year ? `${p.hometown ? ' · ' : ''}Debut ${p.debut_year}` : ''}
             </div>
           </li>
         ))}

@@ -10,19 +10,28 @@ function formatDate(d) {
   } catch { return String(d) }
 }
 
-function playerLabel(s) {
-  const names = [s.player1_name, s.player2_name, s.player3_name, s.player4_name].filter(Boolean)
-  if (names.length) return names.join(' / ')
-  const ids = [s.player1_id, s.player2_id, s.player3_id, s.player4_id].filter(Boolean).map(id => `#${id}`)
-  return ids.join(' / ') || '—'
-}
-
 function formatToPar(val) {
   if (val === null || val === undefined) return '—'
   const n = Number(val)
   if (!Number.isFinite(n)) return '—'
   if (n === 0) return 'E'
   return n > 0 ? `+${n}` : `${n}`
+}
+
+function playerLinks(s) {
+  const players = [
+    { id: s.player1_id, name: s.player1_name },
+    { id: s.player2_id, name: s.player2_name },
+    { id: s.player3_id, name: s.player3_name },
+    { id: s.player4_id, name: s.player4_name },
+  ].filter(p => p.id)
+  if (players.length === 0) return '—'
+  return players.map((p, idx) => (
+    <span key={p.id}>
+      <Link to={`/players/${p.id}`}>{p.name || `#${p.id}`}</Link>
+      {idx < players.length - 1 ? ' / ' : ''}
+    </span>
+  ))
 }
 
 export default function EventDetailPage() {
@@ -91,9 +100,9 @@ export default function EventDetailPage() {
           </thead>
           <tbody>
             {scores.map((s) => (
-              <tr key={s.id ?? `${s.event_id}-${playerLabel(s)}`}>
+              <tr key={s.id ?? `${s.event_id}-${s.placement}-${s.strokes}`}>
                 <td style={{ padding: 8 }}>{s.placement ?? '—'}</td>
-                <td style={{ padding: 8 }}>{playerLabel(s)}</td>
+                <td style={{ padding: 8 }}>{playerLinks(s)}</td>
                 <td style={{ padding: 8 }}>{s.strokes ?? '—'}</td>
                 <td style={{ padding: 8 }}>{formatToPar(s.to_par)}</td>
               </tr>
