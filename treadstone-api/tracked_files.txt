@@ -1,0 +1,15 @@
+data/backups/events_backup_2025-08-11.csv
+data/backups/scores_backup_2025-08-11.csv
+data/bga_results_combined_2025.csv
+index.js
+load_from_staging.sql
+middleware/auth.js
+package-lock.json
+package.json
+routes/courses.js
+routes/events.js
+routes/players.js
+routes/scores.js
+schema.sql
+seed.sql
+staging.sql
