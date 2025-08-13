@@ -1,115 +1,98 @@
-import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { apiFetch } from '../lib/api'
+// src/pages/EventDetailPage.jsx
 
-function formatDate(d) {
-  try {
-    const dt = new Date(d)
-    if (Number.isNaN(dt.getTime())) return String(d)
-    return dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-  } catch { return String(d) }
-}
-
-function formatToPar(val) {
-  if (val === null || val === undefined) return '—'
-  const n = Number(val)
-  if (!Number.isFinite(n)) return '—'
-  if (n === 0) return 'E'
-  return n > 0 ? `+${n}` : `${n}`
-}
-
-function playerLinks(s) {
-  const players = [
-    { id: s.player1_id, name: s.player1_name },
-    { id: s.player2_id, name: s.player2_name },
-    { id: s.player3_id, name: s.player3_name },
-    { id: s.player4_id, name: s.player4_name },
-  ].filter(p => p.id)
-  if (players.length === 0) return '—'
-  return players.map((p, idx) => (
-    <span key={p.id}>
-      <Link to={`/players/${p.id}`}>{p.name || `#${p.id}`}</Link>
-      {idx < players.length - 1 ? ' / ' : ''}
-    </span>
-  ))
-}
+import { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { apiFetch } from '../lib/api';
 
 export default function EventDetailPage() {
-  const { id } = useParams()
-  const [eventData, setEventData] = useState(null)
-  const [scores, setScores] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { id } = useParams();
+  const [event, setEvent] = useState(null);
+  const [scores, setScores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const controller = new AbortController()
-    ;(async () => {
-      setLoading(true)
-      setError(null)
+    async function fetchEventData() {
       try {
-        const [{ data: ev }, { data: sc }] = await Promise.all([
-          apiFetch(`/events/${id}`, { signal: controller.signal }),
-          apiFetch(`/events/${id}/scores`, { signal: controller.signal }),
-        ])
-        setEventData(ev)
-        setScores(Array.isArray(sc) ? sc : [])
+        // Fetch event details
+        const eventData = await apiFetch(`/events/${id}`);
+        setEvent(eventData);
+
+        // Fetch event scores
+        const scoresData = await apiFetch(`/events/${id}/scores`);
+        setScores(scoresData);
+
+        setLoading(false);
       } catch (err) {
-        if (err?.name !== 'AbortError') {
-          console.error(err)
-          setError(err.message || 'Failed to load event.')
-          setEventData(null)
-          setScores([])
-        }
-      } finally {
-        setLoading(false)
+        console.error(err);
+        setError('Failed to load event data');
+        setLoading(false);
       }
-    })()
-    return () => controller.abort()
-  }, [id])
+    }
 
-  if (loading) return <div role="status">Loading event…</div>
-  if (error) return <div role="alert" style={{ color: 'crimson' }}>{error}</div>
-  if (!eventData) return <div>Event not found.</div>
+    fetchEventData();
+  }, [id]);
 
-  const date = eventData.date ?? eventData.event_date ?? eventData.start_date
-  const courseLabel = eventData.course_name
-    ? `${eventData.course_name}${eventData.course_par ? ` (Par ${eventData.course_par})` : ''}`
-    : `Course #${eventData.course_id ?? '—'}`
+  if (loading) return <p>Loading event...</p>;
+  if (error) return <p>{error}</p>;
 
   return (
     <div>
-      <Link to="/" style={{ display: 'inline-block', marginBottom: 12 }}>← Back to Events</Link>
-      <h2 style={{ marginTop: 0 }}>{eventData.name}</h2>
-      <div style={{ opacity: 0.8, marginBottom: 16 }}>
-        {date ? formatDate(date) : 'No date'} · {courseLabel}
-        {eventData.is_major ? ` · Major${eventData.major_label ? `: ${eventData.major_label}` : ''}` : ''}
-      </div>
+      {/* Back link to Events list instead of homepage */}
+      <Link to="/events" style={{ display: 'inline-block', marginBottom: 12 }}>
+        ← Back to Events
+      </Link>
 
-      <h3>Scores</h3>
-      {(!scores || scores.length === 0) ? (
-        <div>No scores posted yet.</div>
+      {event && (
+        <>
+          <h1>{event.name}</h1>
+          <p>
+            <strong>Date:</strong>{' '}
+            {new Date(event.date).toLocaleDateString()}
+          </p>
+          <p>
+            <strong>Course:</strong> {event.course_name || 'Unknown Course'}
+          </p>
+          <p>
+            <strong>Season:</strong> {event.season}
+          </p>
+          {event.is_major && (
+            <p>
+              <strong>Major:</strong> {event.major_label || 'Major Tournament'}
+            </p>
+          )}
+        </>
+      )}
+
+      <h2>Scores</h2>
+      {scores.length === 0 ? (
+        <p>No scores found for this event.</p>
       ) : (
-        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <table>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: 8 }}>Placement</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: 8 }}>Players</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: 8 }}>Strokes</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: 8 }}>To Par</th>
+              <th>Placement</th>
+              <th>Player(s)</th>
+              <th>Strokes</th>
+              <th>To Par</th>
             </tr>
           </thead>
           <tbody>
-            {scores.map((s) => (
-              <tr key={s.id ?? `${s.event_id}-${s.placement}-${s.strokes}`}>
-                <td style={{ padding: 8 }}>{s.placement ?? '—'}</td>
-                <td style={{ padding: 8 }}>{playerLinks(s)}</td>
-                <td style={{ padding: 8 }}>{s.strokes ?? '—'}</td>
-                <td style={{ padding: 8 }}>{formatToPar(s.to_par)}</td>
+            {scores.map((score) => (
+              <tr key={score.id}>
+                <td>{score.placement || '-'}</td>
+                <td>
+                  {[score.player1_name, score.player2_name, score.player3_name, score.player4_name]
+                    .filter(Boolean)
+                    .join(', ')}
+                </td>
+                <td>{score.strokes}</td>
+                <td>{score.to_par}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
     </div>
-  )
+  );
 }

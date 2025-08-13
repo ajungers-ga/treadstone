@@ -19,10 +19,17 @@ function formatToPar(val) {
 }
 
 export default function HomePage() {
+  // Existing summary data
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // NEW: compact homepage feed data
+  const [hp, setHp] = useState(null)
+  const [hpError, setHpError] = useState(null)
+  const [hpLoading, setHpLoading] = useState(true)
+
+  // Fetch /home/summary (keep exactly as you had it)
   useEffect(() => {
     const controller = new AbortController()
     ;(async () => {
@@ -44,11 +51,37 @@ export default function HomePage() {
     return () => controller.abort()
   }, [])
 
+  // NEW: Fetch /api/homepage (upcoming, leaderboard snippet, latest events, top players)
+  useEffect(() => {
+    const controller = new AbortController()
+    ;(async () => {
+      setHpLoading(true)
+      setHpError(null)
+      try {
+        const { url, data } = await apiFetch('/api/homepage', { signal: controller.signal })
+        console.info('[Treadstone] GET /api/homepage URL:', url)
+        setHp(data)
+      } catch (err) {
+        if (err?.name !== 'AbortError') {
+          console.error(err)
+          setHpError(err.message || 'Failed to load homepage feed.')
+        }
+      } finally {
+        setHpLoading(false)
+      }
+    })()
+    return () => controller.abort()
+  }, [])
+
   if (loading) return <div role="status">Loading…</div>
   if (error) return <div role="alert" style={{ color: 'crimson' }}>{error}</div>
   if (!data) return <div>—</div>
 
   const { totals, latest_event, next_event } = data
+  const upcomingEvents = hp?.upcomingEvents ?? []
+  const leaderboardSnippet = hp?.leaderboardSnippet ?? null
+  const latestEvents = hp?.latestEvents ?? []
+  const topPlayers = hp?.topPlayers ?? []
 
   return (
     <div style={{ display: 'grid', gap: 24 }}>
@@ -84,10 +117,10 @@ export default function HomePage() {
               <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: 8 }}>Place</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: 8 }}>Players</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: 8 }}>Strokes</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: 8 }}>To Par</th>
+                    <th style={th}>Place</th>
+                    <th style={th}>Players</th>
+                    <th style={th}>Strokes</th>
+                    <th style={th}>To Par</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -97,10 +130,10 @@ export default function HomePage() {
                       .join(' / ')
                     return (
                       <tr key={r.id}>
-                        <td style={{ padding: 8 }}>{r.placement ?? '—'}</td>
-                        <td style={{ padding: 8 }}>{team || '—'}</td>
-                        <td style={{ padding: 8 }}>{r.strokes ?? '—'}</td>
-                        <td style={{ padding: 8 }}>{formatToPar(r.to_par)}</td>
+                        <td style={td}>{r.placement ?? '—'}</td>
+                        <td style={td}>{team || '—'}</td>
+                        <td style={td}>{r.strokes ?? '—'}</td>
+                        <td style={td}>{formatToPar(r.to_par)}</td>
                       </tr>
                     )
                   })}
@@ -128,6 +161,136 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      {/* Divider */}
+      <hr style={{ border: 0, borderTop: '1px solid #eee' }} />
+
+      {/* NEW: Upcoming Events (from /api/homepage) */}
+      <section>
+        <h2 style={{ margin: 0 }}>Upcoming Events</h2>
+        {hpLoading && <div>Loading upcoming…</div>}
+        {hpError && <div style={{ color: 'crimson' }}>{hpError}</div>}
+        {!hpLoading && !hpError && (
+          upcomingEvents.length > 0 ? (
+            <ul style={{ paddingLeft: 18, marginTop: 12 }}>
+              {upcomingEvents.map(e => (
+                <li key={e.id}>
+                  <Link to={`/events/${e.id}`}>{e.name}</Link> — {formatDate(e.date)} @ {e.course || 'TBD'}
+                </li>
+              ))}
+            </ul>
+          ) : <div style={{ marginTop: 8 }}>No upcoming events.</div>
+        )}
+      </section>
+
+      {/* NEW: Most Recent Leaderboard Snippet */}
+      <section>
+        <h2 style={{ margin: 0 }}>Most Recent Leaderboard</h2>
+        {hpLoading && <div>Loading leaderboard…</div>}
+        {hpError && <div style={{ color: 'crimson' }}>{hpError}</div>}
+        {!hpLoading && !hpError && leaderboardSnippet && (
+          <>
+            <h3 style={{ margin: '8px 0 0' }}>
+              <Link to={`/events/${leaderboardSnippet.event.id}`}>
+                {leaderboardSnippet.event.name}
+              </Link>
+            </h3>
+            <div style={{ opacity: 0.8, marginTop: 4 }}>
+              {formatDate(leaderboardSnippet.event.date)} — {leaderboardSnippet.event.course || 'TBD'}
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
+              <thead>
+                <tr>
+                  <th style={th}>Pos</th>
+                  <th style={th}>Team</th>
+                  <th style={th}>Strokes</th>
+                  <th style={th}>To Par</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaderboardSnippet.rows.map((r, idx) => (
+                  <tr key={`${leaderboardSnippet.event.id}-${idx}`}>
+                    <td style={td}>{r.placement ?? '—'}</td>
+                    <td style={td}>{renderTeamNameLinks(r.teamName, r.playerIds)}</td>
+                    <td style={td}>{r.strokes ?? '—'}</td>
+                    <td style={td}>{formatToPar(r.toPar)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ marginTop: 8 }}>
+              <Link to={`/events/${leaderboardSnippet.event.id}`}>View full leaderboard →</Link>
+            </div>
+          </>
+        )}
+        {!hpLoading && !hpError && !leaderboardSnippet && <div style={{ marginTop: 8 }}>—</div>}
+      </section>
+
+      {/* NEW: Latest Events (podium) */}
+      <section>
+        <h2 style={{ margin: 0 }}>Latest Events</h2>
+        {hpLoading && <div>Loading latest events…</div>}
+        {hpError && <div style={{ color: 'crimson' }}>{hpError}</div>}
+        {!hpLoading && !hpError && (
+          latestEvents.length > 0 ? (
+            <div style={cardGrid}>
+              {latestEvents.map(evt => (
+                <div key={evt.id} style={card}>
+                  <h4 style={{ marginBottom: 6 }}>
+                    <Link to={`/events/${evt.id}`}>{evt.name}</Link>
+                  </h4>
+                  <div style={{ opacity: 0.8 }}>
+                    {formatDate(evt.date)} — {evt.course || 'TBD'}
+                  </div>
+                  <ol style={{ paddingLeft: 18, marginTop: 8 }}>
+                    {evt.podium?.map(p => (
+                      <li key={`${evt.id}-${p.placement}`}>
+                        <strong>
+                          {p.placement === 1 ? '🥇' : p.placement === 2 ? '🥈' : p.placement === 3 ? '🥉' : `#${p.placement}`}
+                        </strong>{' '}
+                        {renderTeamNameLinks(p.teamName, p.playerIds)} — {p.strokes} ({formatToPar(p.toPar)})
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
+          ) : <div style={{ marginTop: 8 }}>No finalized events yet.</div>
+        )}
+      </section>
+
+      {/* NEW: Top Players */}
+      <section>
+        <h2 style={{ margin: 0 }}>Top Players (Career Wins)</h2>
+        {hpLoading && <div>Loading players…</div>}
+        {hpError && <div style={{ color: 'crimson' }}>{hpError}</div>}
+        {!hpLoading && !hpError && (
+          topPlayers.length > 0 ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
+              <thead>
+                <tr>
+                  <th style={th}>#</th>
+                  <th style={th}>Player</th>
+                  <th style={th}>Wins</th>
+                  <th style={th}>Majors</th>
+                  <th style={th}>Events</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topPlayers.map((p, i) => (
+                  <tr key={p.player_id}>
+                    <td style={td}>{i + 1}</td>
+                    <td style={td}><Link to={`/players/${p.player_id}`}>{p.name}</Link></td>
+                    <td style={td}>{Number(p.career_wins).toFixed(2)}</td>
+                    <td style={td}>{Number(p.major_wins).toFixed(2)}</td>
+                    <td style={td}>{p.events_played}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <div style={{ marginTop: 8 }}>—</div>
+        )}
+      </section>
     </div>
   )
 }
@@ -140,3 +303,27 @@ function KPI({ label, value }) {
     </div>
   )
 }
+
+/* helpers */
+function renderTeamNameLinks(teamName, playerIds = []) {
+  const parts = (teamName || '').split(' / ').filter(Boolean)
+  return parts.map((name, i) =>
+    playerIds[i] ? (
+      <span key={`${playerIds[i]}-${i}`}>
+        <Link to={`/players/${playerIds[i]}`}>{name}</Link>
+        {i < parts.length - 1 ? ' / ' : ''}
+      </span>
+    ) : (
+      <span key={`${name}-${i}`}>
+        {name}
+        {i < parts.length - 1 ? ' / ' : ''}
+      </span>
+    )
+  )
+}
+
+/* inline table/card styles */
+const th = { textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: 8 }
+const td = { borderBottom: '1px solid #f1f5f9', padding: 8, verticalAlign: 'top' }
+const cardGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }
+const card = { border: '1px solid #eee', borderRadius: 12, padding: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }
