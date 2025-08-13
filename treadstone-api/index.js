@@ -1,5 +1,6 @@
 // index.js — Treadstone API (CommonJS)
-// Express + pg, with events, players, and scores (names + computed to_par) + player profile routes
+// Express + pg, with events, players, scores (names + computed to_par),
+// player profile routes, and a home summary.
 
 const express = require('express');
 const cors = require('cors');
@@ -18,8 +19,8 @@ const pool = new Pool({
 
 app.use(cors({
   origin: ['http://localhost:5173'],
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
 }));
 app.use(express.json());
 
@@ -30,6 +31,83 @@ app.get('/health', async (_req, res) => {
     res.json({ ok: r.rows[0].ok === 1, port: String(PORT) });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// ---------- Home summary ----------
+app.get('/home/summary', async (_req, res) => {
+  try {
+    const nowQ = await pool.query('SELECT now()::date AS today');
+    const today = nowQ.rows[0].today;
+
+    const totalsQ = await pool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM players)                     AS players,
+        (SELECT COUNT(*) FROM events)                      AS events,
+        (SELECT COUNT(DISTINCT season) FROM events)        AS seasons
+    `);
+
+    // Latest past (or equal) event
+    const latestEventQ = await pool.query(`
+      SELECT
+        e.id, e.name, e.date, e.course_id, e.season,
+        c.name AS course_name, c.par AS course_par
+      FROM events e
+      LEFT JOIN courses c ON c.id = e.course_id
+      WHERE e.date <= $1
+      ORDER BY e.date DESC, e.id DESC
+      LIMIT 1
+    `, [today]);
+
+    let latest = latestEventQ.rows[0] || null;
+    let latestTop = [];
+    if (latest) {
+      const topQ = await pool.query(`
+        SELECT
+          s.id,
+          s.placement,
+          s.strokes,
+          COALESCE(s.to_par, (NULLIF(s.strokes::text,'')::int - c.par)) AS to_par,
+          CONCAT_WS(' ', p1.first_name, p1.last_name) AS player1_name,
+          CONCAT_WS(' ', p2.first_name, p2.last_name) AS player2_name,
+          CONCAT_WS(' ', p3.first_name, p3.last_name) AS player3_name,
+          CONCAT_WS(' ', p4.first_name, p4.last_name) AS player4_name
+        FROM scores s
+        JOIN events e ON e.id = s.event_id
+        LEFT JOIN courses c ON c.id = e.course_id
+        LEFT JOIN players p1 ON p1.id = s.player1_id
+        LEFT JOIN players p2 ON p2.id = s.player2_id
+        LEFT JOIN players p3 ON p3.id = s.player3_id
+        LEFT JOIN players p4 ON p4.id = s.player4_id
+        WHERE s.event_id = $1
+        ORDER BY s.placement NULLS LAST, s.id ASC
+        LIMIT 5
+      `, [latest.id]);
+      latestTop = topQ.rows;
+    }
+
+    // Next upcoming event
+    const nextEventQ = await pool.query(`
+      SELECT
+        e.id, e.name, e.date, e.course_id, e.season,
+        c.name AS course_name, c.par AS course_par
+      FROM events e
+      LEFT JOIN courses c ON c.id = e.course_id
+      WHERE e.date > $1
+      ORDER BY e.date ASC, e.id ASC
+      LIMIT 1
+    `, [today]);
+
+    const nextEvent = nextEventQ.rows[0] || null;
+
+    res.json({
+      totals: totalsQ.rows[0],
+      latest_event: latest ? { ...latest, top_results: latestTop } : null,
+      next_event: nextEvent,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: String(e.message || e) });
   }
 });
 
@@ -92,7 +170,6 @@ app.get('/events/:id/scores', async (req, res) => {
         s.player4_id,
         CONCAT_WS(' ', p4.first_name, p4.last_name) AS player4_name,
         s.strokes,
-        /* Compute to_par if null: strokes - course_par */
         COALESCE(
           s.to_par,
           (NULLIF(s.strokes::text,'')::int - c.par)
@@ -171,7 +248,7 @@ app.get('/players/:id', async (req, res) => {
   }
 });
 
-// player stats (aggregate across scores)
+// player stats
 app.get('/players/:id/stats', async (req, res) => {
   try {
     const { id } = req.params;
@@ -207,7 +284,7 @@ app.get('/players/:id/stats', async (req, res) => {
   }
 });
 
-// player results (list of events they played)
+// player results
 app.get('/players/:id/results', async (req, res) => {
   try {
     const { id } = req.params;
@@ -223,7 +300,6 @@ app.get('/players/:id/results', async (req, res) => {
         s.placement,
         s.strokes,
         COALESCE(s.to_par, (NULLIF(s.strokes::text,'')::int - c.par)) AS to_par,
-        /* team display */
         CONCAT_WS(' ', p1.first_name, p1.last_name) AS player1_name,
         CONCAT_WS(' ', p2.first_name, p2.last_name) AS player2_name,
         CONCAT_WS(' ', p3.first_name, p3.last_name) AS player3_name,
